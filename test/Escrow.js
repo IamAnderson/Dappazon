@@ -40,6 +40,10 @@ describe("Escrow", () => {
     // Approve and List property to escrow
     tx = await realEstate.connect(seller).approve(escrow.address, 1);
     receipt = await tx.wait();
+
+    tx = await escrow.connect(seller).list(1, tokens(10), buyer.address, tokens(5));
+    receipt = await tx.wait();
+
   });
 
   describe("Deployment", () => {
@@ -60,13 +64,6 @@ describe("Escrow", () => {
   });
 
   describe("Listing", () => {
-    describe("Success", async () => {
-      beforeEach(async () => {
-        tx = await escrow
-          .connect(seller)
-          .list(1, tokens(10), buyer.address, tokens(5));
-        receipt = await tx.wait();
-      });
       it("Updates ownership", async () => {
         expect(await realEstate.ownerOf(1)).to.be.equal(escrow.address);
       });
@@ -77,19 +74,24 @@ describe("Escrow", () => {
       it("Returns the purchase price", async () => {
         expect(await escrow.purchasePrice(1)).to.be.equal(tokens(10));
       });
-      
+
       it("Returns the buyer", async () => {
-          expect(await escrow.buyer(1)).to.be.equal(buyer.address);
-        });
-
-        it("Returns the escrow amount", async () => {
-          expect(await escrow.escrowAmount(1)).to.be.equal(tokens(5));
-        });
-    });
-    describe("Failure", async () => {
-      it("Fails if not listed by owner", async () => {
-
+        expect(await escrow.buyer(1)).to.be.equal(buyer.address);
       });
-    });
+
+      it("Returns the escrow amount", async () => {
+        expect(await escrow.escrowAmount(1)).to.be.equal(tokens(5));
+      });
   });
+
+  describe("Deposit", () => {
+    it("Updates contract balance", async () => {
+        const tx = await escrow.connect(buyer).depositEarnest(1, { value: tokens(5) });
+        await tx.wait();
+        
+        const buyerBalance = await escrow.getBalance();
+      expect(buyerBalance).to.be.equal(tokens(5));
+    });
+
+});
 });
