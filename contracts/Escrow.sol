@@ -56,6 +56,7 @@ contract Escrow {
         uint256 _escrowAmount
     ) public payable onlySeller {
         IERC721(nftAddress).transferFrom(msg.sender, address(this), _nftID);
+
         isListed[_nftID] = true;
         purchasePrice[_nftID] = _purchasePrice;
         escrowAmount[_nftID] = _escrowAmount;
@@ -78,9 +79,78 @@ contract Escrow {
     }
 
     function approveSale(uint256 _nftID) public {
-        require(inspectionPassed[_nftID], "Property inspection has not been passed");
-        approval[_nftID][msg.sender] = true; 
-    } 
+        require(
+            inspectionPassed[_nftID],
+            "Property inspection has not been passed"
+        );
+        approval[_nftID][msg.sender] = true;
+    }
+
+    function finalizeSale(uint256 _nftID) public {
+        require(
+            inspectionPassed[_nftID],
+            "Property inspection has not been passed"
+        );
+        require(
+            approval[_nftID][buyer[_nftID]],
+            "Property sale needs to be approved by buyer"
+        );
+        require(
+            approval[_nftID][seller],
+            "Property sale needs to be approved by seller"
+        );
+        require(
+            approval[_nftID][lender],
+            "Property sale needs to be approved by lender"
+        );
+        require(
+            address(this).balance >= purchasePrice[_nftID],
+            "Escrow balance should be >= purchase price"
+        );
+
+        // Transfter escrow balance to seller
+        (bool success, ) = payable(seller).call{value: address(this).balance}(
+            ""
+        );
+        require(success, "Failed to transfer escrow balance to seller");
+
+        IERC721(nftAddress).transferFrom(address(this), buyer[_nftID], _nftID);
+    }
+
+    function cancelSale(uint256 _nftID) public {
+        require(isListed[_nftID], "Property is not listed");
+        require(
+            msg.sender == buyer[_nftID] || msg.sender == seller,
+            "Only buyer or seller can cancel the sale"
+        );
+
+        if (inspectionPassed[_nftID]) {
+            require(
+                msg.sender == seller,
+                "Only seller can cancel after inspection passed"
+            );
+        }
+
+        // Reset approval status
+        approval[_nftID][buyer[_nftID]] = false;
+        approval[_nftID][seller] = false;
+        approval[_nftID][lender] = false;
+
+        // Transfer NFT back to seller
+        IERC721(nftAddress).transferFrom(address(this), seller, _nftID);
+
+        // Refund buyer
+        if (address(this).balance > 0) {
+            payable(buyer[_nftID]).transfer(address(this).balance);
+        }
+
+        // Reset listing status and related mappings
+        isListed[_nftID] = false;
+        purchasePrice[_nftID] = 0;
+        escrowAmount[_nftID] = 0;
+        buyer[_nftID] = address(0);
+        inspectionPassed[_nftID] = false;
+    }
 
     receive() external payable {}
 
